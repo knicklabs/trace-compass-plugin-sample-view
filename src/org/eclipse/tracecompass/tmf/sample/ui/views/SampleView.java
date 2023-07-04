@@ -23,7 +23,9 @@ import org.eclipse.tracecompass.tmf.ui.views.TmfView;
 public class SampleView extends TmfView {
 	private static final String VIEW_ID = "org.eclipse.tracecompass.tmf.sample.ui.view";
 	private ITmfTrace currentTrace;
-	private HashMap<String, Integer> syscallEvents = new HashMap<String, Integer>();
+	//private HashMap<String, Integer> syscallEvents = new HashMap<String, Integer>();
+	
+	private List<SysCallEvent> sysCallEvents = new ArrayList<SysCallEvent>();
 	
 	public SampleView() {
 		super(VIEW_ID);
@@ -31,11 +33,12 @@ public class SampleView extends TmfView {
 	
 	@Override
 	public void createPartControl(Composite parent) {
-		TmfTraceManager traceManager = TmfTraceManager.getInstance();
-        ITmfTrace trace = traceManager.getActiveTrace();
-        if (trace != null) {
-            traceSelected(new TmfTraceSelectedSignal(this, trace));
-        }
+		//TmfTraceManager traceManager = TmfTraceManager.getInstance();
+        //ITmfTrace trace = traceManager.getActiveTrace();
+        
+        //if (trace != null) {
+        //    traceSelected(new TmfTraceSelectedSignal(this, trace));
+        //}
 	}
 	
 	@Override
@@ -50,7 +53,7 @@ public class SampleView extends TmfView {
 			return;
 		}
 		
-		syscallEvents.clear();
+		sysCallEvents.clear();
 		
 		currentTrace = signal.getTrace();
 		
@@ -64,41 +67,19 @@ public class SampleView extends TmfView {
 				super.handleData(data);
 				
 				String name = data.getName();
-				if (name.startsWith("syscall_")) {
-					// Record event name and call count
-					Integer count = syscallEvents.get(name);
-					syscallEvents.put(name,  count == null ? 1 : count + 1);
-				}	
+				Long tid = data.getContent().getFieldValue(Long.class, "context.cpu_id");
+				Long timestamp = data.getTimestamp().toNanos();
+				
+				SysCallEvent.process(sysCallEvents, name, tid, timestamp);
 			}
 			
 			@Override
 			public void handleSuccess() {
 				// Request successful, not more data available
 				super.handleSuccess();
-				
-				// Sort descending
-				Comparator<Map.Entry<String, Integer>> comparator = new Comparator<Map.Entry<String, Integer>>() {
-					@Override
-					public int compare(Map.Entry<String, Integer> set1, Map.Entry<String, Integer> set2) {
-						Integer value1 = set1.getValue();
-						Integer value2 = set2.getValue();
-						return value2.compareTo(value1);
-					}
-				};
-				
-				List<Map.Entry<String, Integer>> collection = new ArrayList<Map.Entry<String, Integer>>();
-				for (Map.Entry<String, Integer> set : syscallEvents.entrySet()) {
-					collection.add(set);
-				}
-				
-				Collections.sort(collection, comparator);
-				
-				// TODO: Display this in a table in the plug-in instead of printing it.
-				System.out.println("syscall: frequency");
-				System.out.println("------------------");
-				
-				for (Map.Entry<String, Integer> set : collection) {
-					System.out.println(set.getKey() + ": " + set.getValue());
+								
+				for (SysCallEvent sysCallEvent : sysCallEvents) {
+					System.out.println(sysCallEvent.toString());
 				}
 				
 				// Update UI in the UI thread.
@@ -117,7 +98,6 @@ public class SampleView extends TmfView {
 			}
 		};
 		
-		ITmfTrace trace = signal.getTrace();
-		trace.sendRequest(req);
+		currentTrace.sendRequest(req);
 	}
 }
